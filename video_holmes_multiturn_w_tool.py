@@ -5,6 +5,7 @@ Preprocess the Video-Holmes dataset to parquet format
 import argparse
 import os
 import sys
+
 import datasets
 
 home_dir = "/mnt/workspace/workgroup_dev/zhanghao/verl"
@@ -82,12 +83,30 @@ if __name__ == "__main__":
                     "tools_kwargs": {
                         "calc_video_reward": {
                             "create_kwargs": {"ground_truth": answer},
+                            # "execute_kwargs": {},
+                            # "calc_reward_kwargs": {},
+                            # "release_kwargs": {},
                         },
-                        "xxx_tool": {
-                            "create_kwargs": {"video_path": video}
-                        }
+                        "execute_frame_extraction": {
+                            "create_kwargs": {
+                                "video_path": os.path.join(video_abs_path, f"{video}.mp4"),
+                                "num_frames": 4,
+                                # "sampling_strategy": "uniform",
+                                "resolution": 224,
+                            },
+                        },
+                        "execute_object_detection": {
+                            "create_kwargs": {
+                                "resolution": 448,
+                            },
+                        },
+                        "execute_frame_caption": {
+                            "create_kwargs": {
+                                "model_name": "xxx",
+                            },
+                        },
                     },
-                },
+                }
             }
             return data
         return process_fn
