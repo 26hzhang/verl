@@ -299,3 +299,10 @@ class RolloutConfig(BaseConfig):
       </tool_response><|im_end|>
       ```
       4. 在多轮rollout的时候，在新的生成之前，额外拼上 `<|im_start|>assistant`，并mask loss：`verl/workers/rollout/schemas.py@get_generation_prompt_ids`
+9. verl 训练时rollout的mode需要设置为 `async`（默认是 `sync`），可以选择在script中添加 `actor_rollout_ref.rollout.mode=async`来设置或者更改 `verl/trainer/config/rollout/rollout.yaml`中的 `mode: async`来实现。训练中发现，如果不更改，在运行 `examples/sglang_multiturn/geo3k/run_qwen2.5-3b_geo3k_multiturn.sh`脚本时，会报 `Fail to parse JSON part`的错误，此外在qwen2.5vl也会报错
+
+   ```bash
+   [36m(TaskRunner pid=64084)[0m File "/tmp/ray/session_2025-10-06_21-02-03_304456_44930/runtime_resources/working_dir_files/_ray_pkg_81d5b00283a53263/verl/models/transformers/qwen2_vl.py", line 397, in process_position_ids
+   [36m(TaskRunner pid=64084)[0m raise ValueError("position_ids should be a 3D tensor of shape (4, batch_size, seq_length).")
+   [36m(TaskRunner pid=64084)[0m ValueError: position_ids should be a 3D tensor of shape (4, batch_size, seq_length).
+   ```
