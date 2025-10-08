@@ -317,7 +317,9 @@ class TaskRunner:
         trainer.init_workers()
 
         # Start the training process.
-        trainer.inference()
+        sample_inputs, sample_outputs = trainer.inference()
+        breakpoint()
+
 
 
 if __name__ == "__main__":

@@ -549,7 +549,7 @@ class RayPPOTrainer:
 
         return gen_batch
 
-    def _validate(self):
+    def _validate(self, inference_only=False):
         data_source_lst = []
         reward_extra_infos_dict: dict[str, list] = defaultdict(list)
 
@@ -623,6 +623,9 @@ class RayPPOTrainer:
             output_texts = [self.tokenizer.decode(ids, skip_special_tokens=True) for ids in output_ids]
             sample_outputs.extend(output_texts)
 
+            if inference_only:
+                continue
+
             test_batch = test_batch.union(test_output_gen_batch)
             test_batch.meta_info["validate"] = True
 
@@ -646,6 +649,9 @@ class RayPPOTrainer:
                 sample_turns.append(test_batch.non_tensor_batch["__num_turns__"])
 
             data_source_lst.append(test_batch.non_tensor_batch.get("data_source", ["unknown"] * reward_tensor.shape[0]))
+        
+        if inference_only:
+            return sample_inputs, sample_outputs
 
         self._maybe_log_val_generations(inputs=sample_inputs, outputs=sample_outputs, scores=sample_scores)
 
@@ -952,8 +958,28 @@ class RayPPOTrainer:
             seqlen_list=global_seqlen_lst, partitions=global_partition_lst, prefix=logging_prefix
         )
         metrics.update(global_balance_stats)
-
+    
     def inference(self):
+        """
+        The validation loop of PPO.
+        """
+        from omegaconf import OmegaConf
+
+        from verl.utils.tracking import Tracking
+
+        logger = Tracking(
+            project_name=self.config.trainer.project_name,
+            experiment_name=self.config.trainer.experiment_name,
+            default_backend=self.config.trainer.logger,
+            config=OmegaConf.to_container(self.config, resolve=True),
+        )
+
+        # load checkpoint before doing anything
+        self._load_checkpoint()
+
+        return self._validate(inference_only=True)
+
+    def validate(self):
         """
         The training loop of PPO.
         The driver process only need to call the compute functions of the worker group through RPC

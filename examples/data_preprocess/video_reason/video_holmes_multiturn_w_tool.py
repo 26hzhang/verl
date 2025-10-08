@@ -29,6 +29,7 @@ if __name__ == "__main__":
         r"You FIRST think about the reasoning process as an internal monologue and then provide the final answer. "
         r"The reasoning process MUST BE enclosed within <think> </think> tags. "
         r"The final answer MUST BE put in \boxed{}."
+        r"You should use `verify_answer` after generating the final answer to verify the answer."
     )
 
     # TODO: define it
@@ -40,7 +41,7 @@ if __name__ == "__main__":
 
             system_prompt = (
                 r"You are a video QA expert. You are given a question and you need to solve it step by step. "
-                r"You should actively use `extract_frames`, `zoom_in_frame` and `verify_answer` according to their usage scenarios and please reasoning step by step before any tool call. "
+                r"You should actively use `extract_frames`, `zoom_in_frame` according to their usage scenarios and please reasoning step by step before any tool call."
                 r"At least one tool call should be made before generate final answer, and refine your answer if necessary. "
             )
 
