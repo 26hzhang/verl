@@ -1,0 +1,20 @@
+tools:
+  - class_name: "verl.tools.video_tool.ReadFrameTool"
+    config: 
+      type: native
+    tool_schema:
+      type: "function"
+      function:
+        name: "read_frames"
+        description: "A tool for uniformly extracting frames from a video, return a list of frames along with their timestamps"
+        parameters:
+          type: "object"
+          properties:
+            start:
+              type: "number"
+              description: "The start timestamp of the video"
+            end:
+              type: "number"
+              description: "The end timestamp of the video"
+                        
+          required: ["start", "end"]

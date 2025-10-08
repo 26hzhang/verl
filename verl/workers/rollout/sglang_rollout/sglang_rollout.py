@@ -425,7 +425,7 @@ class SGLangRollout(BaseRollout):
 
         if self.config.mode == "async" and not self.config.skip_tokenizer_init:
             raise ValueError("async mode requires skip_tokenizer_init to be True")
-        backend = attention_backend if attention_backend is not None else "fa3"
+        backend = attention_backend if attention_backend is not None else "trtllm_mha"
         if effective_first:
             rank = dist.get_rank()
             os.environ["SGLANG_BLOCK_NONZERO_RANK_CHILDREN"] = "0"
@@ -455,7 +455,7 @@ class SGLangRollout(BaseRollout):
                 # log_requests_level=2,
                 # NOTE(Chenyang): turn on max_running_requests to set the max concurrent running requests
                 # max_running_requests=1,
-                "mm_attention_backend": backend,
+                "mm_attention_backend": "sdpa",
                 "attention_backend": backend,
                 # In async mode, we want token in token out.
                 "skip_tokenizer_init": self.config.skip_tokenizer_init,
@@ -1098,6 +1098,7 @@ class SGLangRollout(BaseRollout):
         Thus we do not need to repeat the prompts here and set the sampling parameter n to 1.
         """
         # Async rollout with tools support
+
         do_sample = prompts.meta_info.get("do_sample", True)
         is_validate = prompts.meta_info.get("validate", False)
         tgt_device = prompts.batch["input_ids"].device
