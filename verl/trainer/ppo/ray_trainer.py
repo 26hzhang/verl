@@ -38,25 +38,27 @@ from tqdm import tqdm
 from verl import DataProto
 from verl.experimental.dataset.sampler import AbstractCurriculumSampler
 from verl.protocol import pad_dataproto_to_divisor, unpad_dataproto
-from verl.single_controller.ray import RayClassWithInitArgs, RayResourcePool, RayWorkerGroup
+from verl.single_controller.ray import (RayClassWithInitArgs, RayResourcePool,
+                                        RayWorkerGroup)
 from verl.single_controller.ray.base import create_colocated_worker_cls
 from verl.trainer.config import AlgoConfig
 from verl.trainer.ppo import core_algos
 from verl.trainer.ppo.core_algos import AdvantageEstimator, agg_loss
-from verl.trainer.ppo.metric_utils import (
-    compute_data_metrics,
-    compute_throughout_metrics,
-    compute_timing_metrics,
-    process_validation_metrics,
-)
+from verl.trainer.ppo.metric_utils import (compute_data_metrics,
+                                           compute_throughout_metrics,
+                                           compute_timing_metrics,
+                                           process_validation_metrics)
 from verl.trainer.ppo.reward import compute_reward, compute_reward_async
-from verl.trainer.ppo.utils import Role, WorkerType, need_critic, need_reference_policy, need_reward_model
-from verl.utils.checkpoint.checkpoint_manager import find_latest_ckpt_path, should_save_ckpt_esi
+from verl.trainer.ppo.utils import (Role, WorkerType, need_critic,
+                                    need_reference_policy, need_reward_model)
+from verl.utils.checkpoint.checkpoint_manager import (find_latest_ckpt_path,
+                                                      should_save_ckpt_esi)
 from verl.utils.config import omega_conf_to_dataclass
 from verl.utils.debug import marked_timer
 from verl.utils.metric import reduce_metrics
 from verl.utils.rollout_skip import RolloutSkip
-from verl.utils.seqlen_balancing import get_seqlen_balanced_partitions, log_seqlen_unbalance
+from verl.utils.seqlen_balancing import (get_seqlen_balanced_partitions,
+                                         log_seqlen_unbalance)
 from verl.utils.torch_functional import masked_mean
 from verl.utils.tracking import ValidationGenerationsLogger
 
@@ -344,9 +346,43 @@ class RayPPOTrainer:
         """
         Creates the train and validation dataloaders.
         """
+        
         # TODO: we have to make sure the batch size is divisible by the dp size
         from verl.trainer.main_ppo import create_rl_dataset, create_rl_sampler
+        from verl.utils.dataset.rl_dataset import \
+            collate_fn as default_collate_fn
 
+        # add val_dataloader only
+        if self.config.trainer.get("val_only"):
+            if val_dataset is None:
+                val_dataset = create_rl_dataset(
+                    self.config.data.val_files, self.config.data, self.tokenizer, self.processor
+                )
+            self.val_dataset = val_dataset
+            if collate_fn is None:
+                collate_fn = default_collate_fn
+                
+            num_workers = self.config.data["dataloader_num_workers"]
+            
+            val_batch_size = self.config.data.val_batch_size  # Prefer config value if set
+            if val_batch_size is None:
+                val_batch_size = len(self.val_dataset)
+
+            self.val_dataloader = StatefulDataLoader(
+                dataset=self.val_dataset,
+                batch_size=val_batch_size,
+                num_workers=num_workers,
+                shuffle=self.config.data.get("validation_shuffle", True),
+                drop_last=False,
+                collate_fn=collate_fn,
+            )
+
+            assert len(self.val_dataloader) >= 1, "Validation dataloader is empty!"
+            print(f"Size of val dataloader: {len(self.val_dataloader)}")
+            
+            return
+        
+        # original implementation
         if train_dataset is None:
             train_dataset = create_rl_dataset(
                 self.config.data.train_files, self.config.data, self.tokenizer, self.processor
@@ -360,8 +396,6 @@ class RayPPOTrainer:
         if train_sampler is None:
             train_sampler = create_rl_sampler(self.config.data, self.train_dataset)
         if collate_fn is None:
-            from verl.utils.dataset.rl_dataset import collate_fn as default_collate_fn
-
             collate_fn = default_collate_fn
 
         num_workers = self.config.data["dataloader_num_workers"]
@@ -918,6 +952,34 @@ class RayPPOTrainer:
         )
         metrics.update(global_balance_stats)
 
+    def inference(self):
+        """
+        The training loop of PPO.
+        The driver process only need to call the compute functions of the worker group through RPC
+        to construct the PPO dataflow.
+        The light-weight advantage computation is done on the driver process.
+        """
+        from omegaconf import OmegaConf
+
+        from verl.utils.tracking import Tracking
+
+        logger = Tracking(
+            project_name=self.config.trainer.project_name,
+            experiment_name=self.config.trainer.experiment_name,
+            default_backend=self.config.trainer.logger,
+            config=OmegaConf.to_container(self.config, resolve=True),
+        )
+
+        # load checkpoint before doing anything
+        self._load_checkpoint()
+
+        # perform validation
+        # currently, we only support validation using the reward_function.
+        val_metrics = self._validate()
+        assert val_metrics, f"{val_metrics=}"
+        pprint(f"Validation metrics: {val_metrics}")
+        logger.log(data=val_metrics)
+
     def fit(self):
         """
         The training loop of PPO.
@@ -1069,7 +1131,8 @@ class RayPPOTrainer:
 
                         if "rollout_log_probs" in batch.batch.keys():
                             # TODO: we may want to add diff of probs too.
-                            from verl.utils.debug.metrics import calculate_debug_metrics
+                            from verl.utils.debug.metrics import \
+                                calculate_debug_metrics
 
                             metrics.update(calculate_debug_metrics(batch))
 
