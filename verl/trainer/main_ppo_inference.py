@@ -15,8 +15,11 @@
 Note that we don't combine the main with ray_trainer as ray_trainer is used by other mpain.
 """
 
+import json
 import os
 import socket
+from pathlib import Path
+from typing import Any, Iterable
 
 import hydra
 import ray
@@ -31,6 +34,17 @@ from verl.trainer.ppo.utils import need_critic, need_reference_policy
 from verl.utils.config import validate_config
 from verl.utils.device import is_cuda_available
 from verl.utils.import_utils import load_extern_type
+
+
+def save_jsonl(objs: Iterable[Any], path: str | Path, append: bool = False) -> None:
+    """
+    Write an iterable of JSON-serializable objects to a .jsonl file, one per line.
+    """
+    mode = "a" if append else "w"
+    path = Path(path)
+    with path.open(mode, encoding="utf-8") as f:
+        for obj in objs:
+            f.write(json.dumps(obj, ensure_ascii=False) + "\n")
 
 
 @hydra.main(config_path="config", config_name="ppo_trainer", version_base=None)
@@ -318,7 +332,13 @@ class TaskRunner:
 
         # Start the training process.
         sample_inputs, sample_outputs = trainer.inference()
-        breakpoint()
+        assert len(sample_inputs) == len(sample_outputs)
+        results = []
+        for sample_input, sample_output in zip(sample_inputs, sample_outputs):
+            record = {"question": sample_input, "response": sample_output}
+            results.append(record)
+        save_jsonl(results, "inference_results.jsonl")
+        # breakpoint()
 
 
 
