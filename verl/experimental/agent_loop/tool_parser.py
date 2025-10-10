@@ -94,11 +94,12 @@ class HermesToolParser(ToolParser):
         function_calls = []
         for match in matches:
             try:
+                name, arguments = None, None
                 function_call = json.loads(match)
                 name, arguments = function_call["name"], function_call["arguments"]
                 function_calls.append(FunctionCall(name=name, arguments=json.dumps(arguments, ensure_ascii=False)))
             except Exception as e:
-                logger.error(f"Failed to decode tool call: {e}")
+                logger.error(f"Failed to decode tool call: {e}, match: {match}, name: {name}, arguments: {arguments}")
 
         # remaing text exclude tool call tokens
         content = self.tool_call_regex.sub("", text)

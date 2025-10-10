@@ -6,6 +6,7 @@ import argparse
 import os
 import sys
 from torchcodec.decoders import VideoDecoder
+import numpy as np
 
 import datasets
 import time
@@ -34,6 +35,19 @@ if __name__ == "__main__":
 
     # TODO: define it
 
+    def filter_fn(example):
+        video = example.pop("video ID")
+        video_path = os.path.join(video_abs_path, f"{video}.mp4")
+        if not os.path.exists(video_path):
+            return False
+        vr = VideoDecoder(video_path)
+        try:
+            frame = vr[0]
+        except Exception as e:
+            print(f"Error loading video: {video_path}")
+            return False
+        return True
+
 
     # add a row to each data item that represents a unique id
     def make_map_fn(split):
@@ -58,19 +72,25 @@ if __name__ == "__main__":
             problem = f"{question}\nOptions:\n{options}"
 
             video_path = os.path.join(video_abs_path, f"{video}.mp4")
-            if not os.path.exists(video_path):
-                print(f"Video {video_path} not found")
-                return None
+
 
             vr = VideoDecoder(video_path)
+
             duration = vr.metadata.duration_seconds
-            # duration to HH:MM:SS
             duration = time.strftime("%H:%M:%S", time.gmtime(duration))
 
-            prompt = instruction_following + "\n" + problem + "\n" + f"Let's start with `extract_frames()` from start to end to understand the big picture first, the duration of the video is {duration}."
+            prompt = "\n".join(
+                [
+                    problem,
+                    instruction_following,
+                    f"Since the duration of the video is {duration}, we need to first call `extract_frames` to understand the overall content of the video. After that, we may dig down into certain parts of the video or zoom in on certain frames to understand the details.",
+                    f'<tool_call>{{"name": "extract_frames", "arguments": {{"start": "00:00:00", "end": "{duration}"}}}}</tool_call>',
+                ]
+            )
 
             data = {
                 "data_source": data_source,
+                "agent_name": "tool_agent",
                 "prompt": [
                     {
                         "role": "system",
@@ -109,6 +129,7 @@ if __name__ == "__main__":
                         },
                         "zoom_in_frame": {
                             "create_kwargs": {
+                                "video_path": os.path.join(video_abs_path, f"{video}.mp4"),
                                 "size": 512,
                             },
                         },
@@ -118,6 +139,7 @@ if __name__ == "__main__":
             return data
         return process_fn
 
+    dataset = dataset.filter(function=filter_fn, num_proc=8)
     dataset = dataset.map(function=make_map_fn("train"), with_indices=True, num_proc=8)
     os.makedirs(os.path.dirname(args.output_path), exist_ok=True)
     dataset.to_parquet(args.output_path)

@@ -331,15 +331,29 @@ class TaskRunner:
         trainer.init_workers()
 
         # Start the training process.
-        sample_inputs, sample_outputs = trainer.inference()
+        val_metrics, results = trainer.validate(return_intermediate_results=True)
+        sample_inputs = results["inputs"]
+        sample_outputs = results["outputs"]
+        sample_gts = results["gts"]
+        sample_scores = results["scores"]
+        sample_turns = results["turns"]
+        sample_uids = results["uids"]
+
         assert len(sample_inputs) == len(sample_outputs)
         results = []
-        for sample_input, sample_output in zip(sample_inputs, sample_outputs):
-            record = {"question": sample_input, "response": sample_output}
+        for sample_input, sample_output, sample_gt, sample_score, sample_turn, sample_uid in zip(
+            sample_inputs, sample_outputs, sample_gts, sample_scores, sample_turns, sample_uids
+        ):
+            record = {
+                "question": sample_input,
+                "response": sample_output,
+                "gt": sample_gt,
+                "score": sample_score,
+                "turn": sample_turn,
+                "uid": sample_uid,
+            }
             results.append(record)
         save_jsonl(results, "inference_results.jsonl")
-        # breakpoint()
-
 
 
 if __name__ == "__main__":

@@ -160,6 +160,10 @@ class ToolAgentLoop(AgentLoopBase):
                 logger.error(f"Invalid state: {state}")
                 state = AgentState.TERMINATED
 
+            if os.getenv("VERL_LOGGING_LEVEL", "WARN") == "DEBUG":
+                print(f"# After state: {state}")
+                print(f"agent_data.messages: {agent_data.messages}")
+
         # Finalize output
         response_ids = agent_data.prompt_ids[-len(agent_data.response_mask) :]
         prompt_ids = agent_data.prompt_ids[: len(agent_data.prompt_ids) - len(agent_data.response_mask)]
@@ -177,6 +181,12 @@ class ToolAgentLoop(AgentLoopBase):
             extra_fields={},
         )
         output.extra_fields.update({"turn_scores": agent_data.turn_scores, "tool_rewards": agent_data.tool_rewards})
+
+        decoded_prompt_tokens = self.tokenizer.decode(agent_data.prompt_ids, skip_special_tokens=True)
+
+        if os.getenv("VERL_LOGGING_LEVEL", "WARN") == "DEBUG":
+            print(f"# tokens after output: {decoded_prompt_tokens}")
+
         return output
 
     async def _handle_pending_state(self, agent_data: AgentData, sampling_params: dict[str, Any]) -> AgentState:
@@ -205,7 +215,12 @@ class ToolAgentLoop(AgentLoopBase):
                     **self.apply_chat_template_kwargs,
                 ),
             )
-        return AgentState.GENERATING
+
+        _, agent_data.tool_calls = await self.tool_parser.extract_tool_calls(agent_data.prompt_ids)
+        if agent_data.tool_calls:
+            return AgentState.PROCESSING_TOOLS
+        else:
+            return AgentState.GENERATING
 
     async def _handle_generating_state(
         self, agent_data: AgentData, sampling_params: dict[str, Any], ignore_termination: bool = False
@@ -354,6 +369,7 @@ class ToolAgentLoop(AgentLoopBase):
         if agent_data.response_logprobs:
             agent_data.response_logprobs += [0.0] * len(response_ids)
         agent_data.user_turns += 1
+
         return AgentState.GENERATING
 
     async def _handle_interacting_state(self, agent_data: AgentData) -> AgentState:

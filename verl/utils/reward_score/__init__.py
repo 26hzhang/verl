@@ -89,6 +89,10 @@ def default_compute_score(
         from . import geo3k
 
         res = geo3k.compute_score(solution_str, ground_truth)
+    elif data_source in ["TencentARC/Video-Holmes"]:
+        from . import video_holmes
+
+        res = video_holmes.compute_score(solution_str, ground_truth)
     elif data_source in [
         "searchR1_nq",
         "searchR1_triviaqa",

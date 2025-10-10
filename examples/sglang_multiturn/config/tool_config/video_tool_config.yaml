@@ -1,20 +1,51 @@
 tools:
-  - class_name: "verl.tools.video_tool.ReadFrameTool"
+  - class_name: "verl.tools.video_tool.ExtractFramesTool"
     config: 
       type: native
     tool_schema:
       type: "function"
       function:
-        name: "read_frames"
-        description: "A tool for uniformly extracting frames from a video, return a list of frames along with their timestamps"
+        name: "extract_frames"
+        description: "A tool for uniformly extracting frames from a video given start and end timestamps, return a list of frames along with their timestamps"
         parameters:
           type: "object"
           properties:
             start:
-              type: "number"
-              description: "The start timestamp of the video"
+              type: "string"
+              description: "The start timestamp of the video in HH:MM:SS format"
             end:
-              type: "number"
-              description: "The end timestamp of the video"
-                        
+              type: "string"
+              description: "The end timestamp of the video in HH:MM:SS format"
           required: ["start", "end"]
+  
+  - class_name: "verl.tools.video_tool.ZoomInFrameTool"
+    config:
+      type: native
+    tool_schema:
+      type: "function"
+      function:
+        name: "zoom_in_frame"
+        description: "A tool for zooming in on a specific frame from the video given a timestamp"
+        parameters:
+          type: "object"
+          properties:
+            timestamp:
+              type: "string"
+              description: "The timestamp of the frame to zoom in on in HH:MM:SS format"
+          required: ["timestamp"]
+  
+  - class_name: "verl.tools.video_tool.VerifyAnswerTool"
+    config:
+      type: native
+    tool_schema:
+      type: "function"
+      function:
+        name: "verify_answer"
+        description: "A tool for verifying the final answer against the ground truth"
+        parameters:
+          type: "object"
+          properties:
+            answer:
+              type: "string"
+              description: "The answer to verify"
+          required: ["answer"]

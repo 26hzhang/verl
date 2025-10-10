@@ -549,7 +549,7 @@ class RayPPOTrainer:
 
         return gen_batch
 
-    def _validate(self, inference_only=False):
+    def _validate(self, return_intermediate_results=False):
         data_source_lst = []
         reward_extra_infos_dict: dict[str, list] = defaultdict(list)
 
@@ -623,9 +623,6 @@ class RayPPOTrainer:
             output_texts = [self.tokenizer.decode(ids, skip_special_tokens=True) for ids in output_ids]
             sample_outputs.extend(output_texts)
 
-            if inference_only:
-                continue
-
             test_batch = test_batch.union(test_output_gen_batch)
             test_batch.meta_info["validate"] = True
 
@@ -650,9 +647,6 @@ class RayPPOTrainer:
 
             data_source_lst.append(test_batch.non_tensor_batch.get("data_source", ["unknown"] * reward_tensor.shape[0]))
         
-        if inference_only:
-            return sample_inputs, sample_outputs
-
         self._maybe_log_val_generations(inputs=sample_inputs, outputs=sample_outputs, scores=sample_scores)
 
         # dump generations
@@ -696,7 +690,17 @@ class RayPPOTrainer:
             metric_dict["val-aux/num_turns/max"] = sample_turns.max()
             metric_dict["val-aux/num_turns/mean"] = sample_turns.mean()
 
-        return metric_dict
+        if return_intermediate_results:
+            return metric_dict, {
+                "inputs": sample_inputs,
+                "outputs": sample_outputs,
+                "gts": sample_gts,
+                "scores": sample_scores,
+                "turns": sample_turns,
+                "uids": sample_uids,
+            }
+        else:
+            return metric_dict
 
     def init_workers(self):
         """Initialize distributed training workers using Ray backend.
@@ -976,10 +980,12 @@ class RayPPOTrainer:
 
         # load checkpoint before doing anything
         self._load_checkpoint()
+        if not hasattr(self, "global_steps"):
+            self.global_steps = 0
 
         return self._validate(inference_only=True)
 
-    def validate(self):
+    def validate(self, return_intermediate_results=False):
         """
         The training loop of PPO.
         The driver process only need to call the compute functions of the worker group through RPC
@@ -1000,9 +1006,13 @@ class RayPPOTrainer:
         # load checkpoint before doing anything
         self._load_checkpoint()
 
+        if not hasattr(self, "global_steps"):
+            print("Calling validate before training. Setting global_steps to 0.")
+            self.global_steps = 0
+
         # perform validation
         # currently, we only support validation using the reward_function.
-        val_metrics = self._validate()
+        val_metrics = self._validate(return_intermediate_results=return_intermediate_results)
         assert val_metrics, f"{val_metrics=}"
         pprint(f"Validation metrics: {val_metrics}")
         logger.log(data=val_metrics)

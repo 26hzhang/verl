@@ -29,6 +29,7 @@ class SingleTurnAgentLoop(AgentLoopBase):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        print(f"SingleTurnAgentLoop init: {self.config}")
         self.prompt_length = self.config.actor_rollout_ref.rollout.prompt_length
         self.response_length = self.config.actor_rollout_ref.rollout.response_length
         self.apply_chat_template_kwargs = self.config.data.get("apply_chat_template_kwargs", {})
