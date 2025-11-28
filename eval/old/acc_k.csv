@@ -1,0 +1,6 @@
+model,1,2,4,8,16
+/mindopt/nlp_nas_2/weiwen/verl_checkpoints/math_rl/Qwen2.5-math-7B_math-vllm-n8_0929_grpo_under_cutsetting_first20/global_step_77/actor/huggingface/math-test-temp_0.6-top_p_0.95-top_k_-1.jsonl,0.7734,0.7741,0.77255,0.772425,0.7713375
+/mindopt/nlp_nas_2/weiwen/verl_checkpoints/math_rl/Qwen2.5-math-7B_math-vllm-n8_0929_grpo_under_cutsetting_first20/global_step_77/actor/huggingface/aime2024-test-temp_0.6-top_p_0.95-top_k_-1.jsonl,0.26666666666666666,0.21666666666666667,0.225,0.2375,0.24791666666666667
+/mindopt/nlp_nas_2/weiwen/verl_checkpoints/math_rl/Qwen2.5-math-7B_math-vllm-n8_0929_grpo_under_cutsetting_first20/global_step_77/actor/huggingface/aime2025-test-temp_0.6-top_p_0.95-top_k_-1.jsonl,0.1,0.1,0.11666666666666667,0.10833333333333334,0.10416666666666667
+/mindopt/nlp_nas_2/weiwen/verl_checkpoints/math_rl/Qwen2.5-math-7B_math-vllm-n8_0929_grpo_under_cutsetting_first20/global_step_77/actor/huggingface/amc23-test-temp_0.6-top_p_0.95-top_k_-1.jsonl,0.6,0.55,0.58125,0.59375,0.5984375
+/mindopt/nlp_nas_2/weiwen/verl_checkpoints/math_rl/Qwen2.5-math-7B_math-vllm-n8_0929_grpo_under_cutsetting_first20/global_step_77/actor/huggingface/gpqa-test-temp_0.6-top_p_0.95-top_k_-1.jsonl,0.19419642857142858,0.19196428571428573,0.18359375,0.185546875,0.18931361607142858

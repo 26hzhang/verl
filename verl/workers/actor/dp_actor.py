@@ -39,6 +39,26 @@ from verl.utils.torch_functional import logprobs_from_logits
 from verl.utils.ulysses import gather_outputs_and_unpad, ulysses_pad, ulysses_pad_and_slice_inputs
 from verl.workers.actor import BasePPOActor
 from verl.workers.config import ActorConfig
+from verl.cpo import (
+    advantage_wrap_naive,
+    advantage_wrap_naive_qwen3,
+    advantage_wrap_noaccmask_qwen3,
+    advantage_wrap_mi_qwen3,
+    advantage_wrap_mi_accmask_qwen3,
+    advantage_wrap_mi_unify_qwen3,
+    advantage_wrap_mi_clamp_unify_qwen3,
+    advantage_wrap_mi_clamp_unify_difficulty_qwen3,
+    advantage_wrap_mi3_qwen3,
+    advantage_wrap_negonly_mi3_qwen3,
+    advantage_wrap_negonly_mi_qwen3,
+    advantage_wrap_reverse_mi3_qwen3,
+    advantage_wrap_addition_mi3_qwen3,
+    advantage_wrap_mi2_qwen3,
+    advantage_wrap_negonly_seq_kl_qwen3,
+    advantage_wrap_seq_kl_qwen3,
+    advantage_wrap_negonly_tok_kl_qwen3,
+    advantage_wrap_tok_kl_qwen3,
+)
 
 __all__ = ["DataParallelPPOActor"]
 
@@ -372,7 +392,7 @@ class DataParallelPPOActor(BasePPOActor):
     def update_policy(self, data: DataProto):
         # make sure we are in training mode
         self.actor_module.train()
-
+        cpo = False
         temperature = data.meta_info["temperature"]  # temperature must be in the data.meta_info to avoid silent error
 
         select_keys = [
@@ -393,6 +413,13 @@ class DataParallelPPOActor(BasePPOActor):
         # Include rollout_log_probs for computing rollout_corr metrics in bypass mode
         if "rollout_log_probs" in data.batch.keys():
             select_keys.append("rollout_log_probs")
+        if "gw_yl_log_probs" in data.batch.keys():
+            select_keys.append("gw_yl_log_probs")
+            select_keys.append("difficulty_mask")
+            select_keys.append("token_level_rewards")
+            cpo = True
+            if "yw_rewards" in data.batch.keys():
+                select_keys.append("yw_rewards")
 
         has_multi_modal_inputs = "multi_modal_inputs" in data.non_tensor_batch.keys()
         non_tensor_select_keys = ["multi_modal_inputs"] if has_multi_modal_inputs else []
@@ -441,6 +468,43 @@ class DataParallelPPOActor(BasePPOActor):
                     entropy, log_prob = self._forward_micro_batch(
                         model_inputs, temperature=temperature, calculate_entropy=calculate_entropy
                     )
+                    if cpo:
+                        if self.config.get("wrap_method", "none") == "tok_kl":
+                            advantages = advantage_wrap_tok_kl_qwen3(micro_batch, advantages, entropy.detach(), self.config)
+                        if self.config.get("wrap_method", "none") == "negonly_mi":
+                            advantages = advantage_wrap_negonly_mi_qwen3(micro_batch, advantages, entropy.detach(), self.config)
+                        elif self.config.get("wrap_method", "none") == "negonly_tok_kl":    
+                            advantages = advantage_wrap_negonly_tok_kl_qwen3(micro_batch, advantages, entropy.detach(), self.config)
+                        elif self.config.get("wrap_method", "none") == "seq_kl":    
+                            advantages = advantage_wrap_seq_kl_qwen3(micro_batch, advantages, entropy.detach(), self.config)
+                        elif self.config.get("wrap_method", "none") == "negonly_seq_kl":    
+                            advantages = advantage_wrap_negonly_seq_kl_qwen3(micro_batch, advantages, entropy.detach(), self.config)
+                        elif self.config.get("wrap_method", "none") == "negonly_mi3":
+                            advantages = advantage_wrap_negonly_mi3_qwen3(micro_batch, advantages, entropy.detach(), self.config)
+                        elif self.config.get("wrap_method", "none") == "addition_mi3":
+                            advantages = advantage_wrap_addition_mi3_qwen3(micro_batch, advantages, entropy.detach(), self.config)
+                        elif self.config.get("wrap_method", "none") == "reverse_mi3":
+                            advantages = advantage_wrap_reverse_mi3_qwen3(micro_batch, advantages, entropy.detach(), self.config)
+                        elif self.config.get("wrap_method", "none") == "mi":
+                            advantages = advantage_wrap_mi_qwen3(micro_batch, advantages, entropy.detach(), self.config)
+                        elif self.config.get("wrap_method", "none") == "mi2":
+                            advantages, _ = advantage_wrap_mi2_qwen3(micro_batch, advantages, entropy.detach(), self.config)
+                        elif self.config.get("wrap_method", "none") == "mi3":
+                            advantages = advantage_wrap_mi3_qwen3(micro_batch, advantages, entropy.detach(), self.config)
+                        elif self.config.get("wrap_method", "none") == "mi_clamp_unify_difficulty":
+                            advantages = advantage_wrap_mi_clamp_unify_difficulty_qwen3(micro_batch, advantages, entropy.detach(), self.config)
+                        elif self.config.get("wrap_method", "none") == "mi_clamp_unify":
+                            advantages = advantage_wrap_mi_clamp_unify_qwen3(micro_batch, advantages, entropy.detach(), self.config)
+                        elif self.config.get("wrap_method", "none") == "mi_unify":
+                            advantages = advantage_wrap_mi_unify_qwen3(micro_batch, advantages, entropy.detach(), self.config)
+                        elif self.config.get("wrap_method", "none") == "noaccmask":
+                            advantages = advantage_wrap_noaccmask_qwen3(micro_batch, advantages, entropy.detach(), self.config)
+                        elif self.config.get("wrap_method", "none") == "mi_accmask":
+                            advantages = advantage_wrap_mi_accmask_qwen3(micro_batch, advantages, entropy.detach(), self.config)
+                        elif self.actor_module.model.__class__.__name__ == "Qwen3Model":
+                            advantages = advantage_wrap_naive_qwen3(micro_batch, advantages, entropy.detach(), self.config)
+                        else:
+                            advantages = advantage_wrap_naive(micro_batch, advantages, entropy.detach(), self.config)
 
                     # for fully_async_policy recipe
                     if hasattr(self.config, "use_rollout_log_probs") and self.config.use_rollout_log_probs:
@@ -450,6 +514,17 @@ class DataParallelPPOActor(BasePPOActor):
                             old_log_prob = log_prob.detach()
                         else:
                             old_log_prob = model_inputs["old_log_probs"]
+                    
+                    if self.config.loss_position == "entropy":
+                        masked_entropy = entropy * response_mask
+                        entropy_threshold = torch.quantile(masked_entropy, 0.8)
+                        response_mask = (response_mask == 1) & (entropy > entropy_threshold)
+                    elif self.config.loss_position == "first":
+                        new_mask = torch.zeros_like(response_mask)
+                        batch_size, seq_length = response_mask.shape
+                        cutoff = int(seq_length * 0.2)
+                        new_mask[:, :cutoff] = 1
+                        response_mask = (response_mask == 1) & (new_mask == 1)
 
                     loss_mode = self.config.policy_loss.get("loss_mode", "vanilla")
                     # vanilla -> verl.trainer.ppo.core_algos.compute_policy_loss_vanilla

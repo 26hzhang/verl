@@ -45,6 +45,18 @@ def default_compute_score(
         from . import gsm8k
 
         res = gsm8k.compute_score(solution_str, ground_truth)
+    elif data_source in ['hendrycks_math:train_MATH-500:test', 'hendrycks_math', 'math500']:
+        from . import math_cpo
+        res = math_cpo.compute_score(solution_str, ground_truth)
+    elif data_source in ['hendrycks_math01']:
+        from . import math_cpo
+        res = math_cpo.compute_score(solution_str, ground_truth, is_01=True)
+    elif data_source in [ 'amc23', 'aime2025', 'aime2024']:
+        from . import math_cpo
+        res = math_cpo.aime_compute_score(solution_str, ground_truth)
+    elif data_source in ['gpqa']:
+        from . import multi_choice
+        res = multi_choice.compute_score(solution_str, ground_truth)
     elif data_source in ["lighteval/MATH", "DigitalLearningGmbH/MATH-lighteval", "HuggingFaceH4/MATH-500"]:
         from . import math_reward
 

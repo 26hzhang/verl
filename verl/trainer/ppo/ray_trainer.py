@@ -59,6 +59,12 @@ from verl.utils.rollout_skip import RolloutSkip
 from verl.utils.seqlen_balancing import calculate_workload, get_seqlen_balanced_partitions, log_seqlen_unbalance
 from verl.utils.torch_functional import masked_mean
 from verl.utils.tracking import ValidationGenerationsLogger
+import time
+from verl.cpo import (
+    add_hint_to_data_batch, 
+    compute_judge, 
+    compute_difficulty_mask
+)
 
 
 @dataclass
@@ -226,7 +232,7 @@ def compute_advantage(
                 config.pf_ppo.get("reweight_method"),
                 config.pf_ppo.get("weight_pow"),
             )
-    elif adv_estimator == AdvantageEstimator.GRPO:
+    elif adv_estimator == AdvantageEstimator.GRPO or adv_estimator == AdvantageEstimator.CPO:
         # Initialize the mask for GRPO calculation
         grpo_calculation_mask = data.batch["response_mask"]
 
@@ -1165,6 +1171,35 @@ class RayPPOTrainer:
                         with marked_timer("values", timing_raw, color="cyan"):
                             values = self.critic_wg.compute_values(batch)
                             batch = batch.union(values)
+                    
+                    # compute cpo weight
+                    if self.config.algorithm.adv_estimator =='cpo':
+                        # compute difficulty mask, which identifies all-easy and all-hard samples in a batch
+                        difficulty_mask = compute_difficulty_mask(batch)
+                        print(f"original avg acc @{self.config.actor_rollout_ref.rollout.n}:{sum(reward_extra_infos_dict['acc']) / len(reward_extra_infos_dict['acc'])}")
+                        # judgement reward
+                        start_time = time.time()
+                        hints = compute_judge(batch, tokenizer=self.reward_fn.tokenizer, gold_as_hint=self.config.algorithm.gold_as_hint)
+                        batch_with_gw_yl, gen_batch_yw = add_hint_to_data_batch(batch, hints, self.reward_fn.tokenizer)
+                        print(f"add hint time: {time.time() - start_time}")
+                        # gen_batch_yw.meta_info["do_sample"] = False
+                        # # start_time = time.time()
+                        # gen_batch_output_yw = self.actor_rollout_wg.generate_sequences(gen_batch_yw)
+                        # reward_tensor_yw, reward_extra_infos_dict_yw = compute_reward(gen_batch_output_yw, self.reward_fn)
+                        # reward_tensor_yw = reward_tensor_yw.sum(dim=-1)
+                        # print(f"y win avg acc @{1}:{sum(reward_extra_infos_dict_yw['acc']) / len(reward_extra_infos_dict_yw['acc'])}", )
+                        # # breakpoint()
+                        start_time = time.time()    
+                        gw_yl_log_probs = self.actor_rollout_wg.compute_log_prob(batch_with_gw_yl)
+                        print(f"gw_yl_log_probs time: {time.time() - start_time}")
+                        gw_yl_log_probs = DataProto.from_dict(tensors={"gw_yl_log_probs": gw_yl_log_probs.batch["old_log_probs"], "difficulty_mask": difficulty_mask})
+                        batch = batch.union(gw_yl_log_probs)
+                        # debug: print a sample generation that has all -1 reward
+                        mask = batch.batch["token_level_scores"].sum(dim=-1) == -1
+                        # if mask.any():
+                        #     result = convert_tokens_with_logprobs(batch.batch[mask][:1], self.reward_fn.tokenizer, config=self.config.algorithm)
+                        #     result_str = process_token_data_to_string(result[0])
+                        #     print(result_str)
 
                     with marked_timer("adv", timing_raw, color="brown"):
                         # we combine with rule-based rm
@@ -1230,6 +1265,8 @@ class RayPPOTrainer:
                             batch.meta_info["multi_turn"] = rollout_config.multi_turn.enable
                             # TODO: Make "temperature" single source of truth from generation.
                             batch.meta_info["temperature"] = rollout_config.temperature
+                            # This function is to call the CPO algo, location: verl/workers/fsdp_workers.py
+                            # While fsdp_workers.py will call verl/workers/actor/dp_actor.py Line 355 update_policy() to update model
                             actor_output = self.actor_rollout_wg.update_actor(batch)
                         actor_output_metrics = reduce_metrics(actor_output.meta_info["metrics"])
                         metrics.update(actor_output_metrics)

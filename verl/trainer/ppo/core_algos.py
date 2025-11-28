@@ -105,6 +105,7 @@ class AdvantageEstimator(str, Enum):
     GPG = "gpg"
     RLOO_VECTORIZED = "rloo_vectorized"
     GRPO_VECTORIZED = "grpo_vectorized"
+    CPO = 'cpo'
 
 
 ADV_ESTIMATOR_REGISTRY: dict[str, Any] = {}

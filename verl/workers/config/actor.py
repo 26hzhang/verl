@@ -124,6 +124,13 @@ class ActorConfig(BaseConfig):
     engine: BaseConfig = field(default_factory=BaseConfig)
     rollout_n: int = MISSING  # must be override by sampling config
     model_config: HFModelConfig = field(default_factory=BaseConfig)
+    
+    # CPO Hyperparameters
+    cpo_lambda: float = 2.0          # 比例裁剪参数（典型范围：1.5-5.0）
+    pos_alpha: float = 0.0           # 正样本缩放系数
+    neg_alpha: float = 0.0           # 负样本缩放系数
+    loss_position: str = "all"       # loss计算位置
+    wrap_method: str = "naive_qwen3" # 优势函数包装方法（有17种可选）
 
     # Store global batch info for loss aggregation:
     # dp_size: data parallel size

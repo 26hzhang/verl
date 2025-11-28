@@ -111,6 +111,7 @@ class RLHFDataset(Dataset):
         self.return_full_prompt = config.get("return_full_prompt", False)
         self.truncation = config.get("truncation", "error")
         self.filter_overlong_prompts = config.get("filter_overlong_prompts", True)
+        self.thinking = config.get("thinking", False)
         self.apply_chat_template_kwargs = config.get("apply_chat_template_kwargs", {})
 
         self.tool_config_path = config.get("tool_config_path", None)
@@ -238,7 +239,7 @@ class RLHFDataset(Dataset):
                             apply_kwargs["tools"] = self.tool_schemas
 
                         return len(
-                            tokenizer.apply_chat_template(doc[prompt_key], add_generation_prompt=True, **apply_kwargs)
+                            tokenizer.apply_chat_template(doc[prompt_key], add_generation_prompt=True, enable_thinking=self.thinking, **apply_kwargs)
                         )
                     except Exception:
                         print("Error processing one of the samples, skipping...")
@@ -299,7 +300,7 @@ class RLHFDataset(Dataset):
             from verl.utils.dataset.vision_utils import process_image, process_video
 
             raw_prompt = self.processor.apply_chat_template(
-                messages, add_generation_prompt=True, tokenize=False, **self.apply_chat_template_kwargs
+                messages, add_generation_prompt=True, tokenize=False, enable_thinking=self.thinking, **self.apply_chat_template_kwargs
             )
             multi_modal_data = {}
 
@@ -361,7 +362,7 @@ class RLHFDataset(Dataset):
                     "models like GLM can copy chat_template.jinja from instruct models"
                 )
             raw_prompt = self.tokenizer.apply_chat_template(
-                messages, add_generation_prompt=True, tokenize=False, **self.apply_chat_template_kwargs
+                messages, add_generation_prompt=True, tokenize=False, enable_thinking=self.thinking, **self.apply_chat_template_kwargs
             )
             model_inputs = self.tokenizer(raw_prompt, return_tensors="pt", add_special_tokens=False)
             input_ids = model_inputs.pop("input_ids")
