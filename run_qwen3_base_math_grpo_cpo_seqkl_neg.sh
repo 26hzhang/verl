@@ -1,7 +1,7 @@
 #!/bin/bash
 # run on 8xH100
 # make sure your current working directory is the root of the project
-export VLLM_USE_V1=1
+# export VLLM_USE_V1=1
 
 swanlab login --api-key iPPnOFirR3dXCBgOBPqiB
 
@@ -32,7 +32,7 @@ loss_position="all"
 wrap_method="seq_kl"
 
 # Hyperparams
-DTYPE=bfloat16
+DTYPE=float32
 MODEL_DTYPE=fp32
 
 PROJECT_DIR="$(pwd)"
@@ -43,8 +43,8 @@ aime2024_test_path=$PROJECT_DIR/data/math_train/test_aime2024.parquet
 gpqa_test_path=$PROJECT_DIR/data/math_train/test_gpqa.parquet
 amc23_test_path=$PROJECT_DIR/data/math_train/test_amc23.parquet
 math500_test_path=$PROJECT_DIR/data/math_train/test_math500.parquet
-project_name='cpo_qwen3-4b-base'
-exp_name='Qwen3-4B-base_math-vllm-n8_1125_cpo_neg1_seqkl_clip_studio'
+project_name='cpo_qwen3-4b-base_run'
+exp_name='Qwen3-4B-base_math-vllm-n8_1202_cpo_neg1_seqkl_clip'
 CKPTS_DIR=$PROJECT_DIR/checkpoints/${project_name}/${exp_name}
 train_files="['$math_train_path']"
 test_files="['$math500_test_path', '$aime2024_test_path', '$aime2025_test_path', '$amc23_test_path', '$gpqa_test_path']"
@@ -77,6 +77,7 @@ PYTHONUNBUFFERED=1 python -m verl.trainer.main_ppo \
     actor_rollout_ref.actor.kl_loss_coef=${kl_loss_coef} \
     actor_rollout_ref.actor.kl_loss_type=low_var_kl \
     actor_rollout_ref.actor.entropy_coeff=0 \
+    actor_rollout_ref.actor.calculate_entropy=True \
     actor_rollout_ref.actor.use_dynamic_bsz=True \
     actor_rollout_ref.actor.ppo_max_token_len_per_gpu=20000 \
     actor_rollout_ref.actor.loss_agg_mode=${loss_agg_mode} \
@@ -90,13 +91,14 @@ PYTHONUNBUFFERED=1 python -m verl.trainer.main_ppo \
     +actor_rollout_ref.actor.loss_position=${loss_position} \
     +actor_rollout_ref.actor.wrap_method=${wrap_method} \
     actor_rollout_ref.rollout.calculate_log_probs=True \
+    actor_rollout_ref.rollout.dtype=$DTYPE \
     actor_rollout_ref.rollout.max_num_batched_tokens=20000 \
     actor_rollout_ref.rollout.free_cache_engine=True \
     actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=2 \
-    actor_rollout_ref.rollout.tensor_model_parallel_size=2 \
+    actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
     actor_rollout_ref.rollout.name=vllm \
-    actor_rollout_ref.rollout.gpu_memory_utilization=0.5 \
-    actor_rollout_ref.rollout.mode=async \
+    actor_rollout_ref.rollout.gpu_memory_utilization=0.6 \
+    actor_rollout_ref.rollout.mode=sync \
     actor_rollout_ref.rollout.n=8 \
     actor_rollout_ref.rollout.multi_turn.enable=False \
     actor_rollout_ref.rollout.multi_turn.max_assistant_turns=1 \

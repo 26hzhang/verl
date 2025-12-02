@@ -20,7 +20,7 @@ if [ ! -d "model_weights/Qwen3-4B" ]; then
     huggingface-cli download --resume-download Qwen/Qwen3-4B --local-dir model_weights/Qwen3-4B
 fi
 
-if [ ! -d "model_weights/Qwen3-4B" ]; then
+if [ ! -d "model_weights/Qwen3-4B-Base" ]; then
     huggingface-cli download --resume-download Qwen/Qwen3-4B-Base --local-dir model_weights/Qwen3-4B-Base
 fi
 

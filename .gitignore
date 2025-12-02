@@ -120,8 +120,6 @@ ENV/
 # ckpt
 *.lock
 
-# data
-*.parquet
 
 
 # local logs
